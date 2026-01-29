@@ -29,7 +29,7 @@ if cached_uid and not st.session_state["authenticated"]:
         st.session_state["current_user"] = cached_uid
 
 # --- Page Config & Styling ---
-st.set_page_config(layout="wide", page_title="Business Planning Assistant")
+st.set_page_config(layout="wide", page_title="ThunderbAIrd Assistant")
 
 st.markdown("""
     <style>
@@ -40,8 +40,8 @@ st.markdown("""
 
 # --- Internal AI Configuration ---
 AI_CONFIG = {
-    "active_model": "gemini-3-pro-preview",
-    "system_instruction": "You are a helpful Business Planning Assistant. Provide clear, professional, and actionable advice."
+    "active_model": "ChatGPT 5.2",
+    "system_instruction": "You are a helpful Business Planning Assistant called ThunderbAIrd. Provide clear, professional, and actionable advice."
 }
 selected_label = AI_CONFIG["active_model"]
 system_instr = AI_CONFIG["system_instruction"]
@@ -79,7 +79,7 @@ def handle_feedback(understood: bool, selected_label):
 
 # --- UI Header ---
 st.image("combined_logo.jpg")
-st.title("Business Planning Assistant")
+st.title("ThunderbAIrd Assistant")
 
 # --- Sidebar Management ---
 with st.sidebar:
@@ -224,7 +224,7 @@ else:
     if st.session_state.get("trigger_clarification", False):
         with st.chat_message("assistant"):
             with st.container(border=True):
-                st.markdown("**Business Planning Assistant:**")
+                st.markdown("**ThunderbAIrd Assistant:**")
                 ai_manager = AIManager(selected_label)
                 full_response = st.write_stream(
                     ai_manager.get_response_stream(st.session_state["messages"], system_instr)
@@ -255,7 +255,7 @@ else:
 
         with st.chat_message("assistant"):
             with st.container(border=True):
-                st.markdown("**Business Planning Assistant:**")
+                st.markdown("**ThunderbAIrd Assistant:**")
                 ai_manager = AIManager(selected_label)
                 full_response = st.write_stream(
                     ai_manager.get_response_stream(st.session_state["messages"], system_instr)
