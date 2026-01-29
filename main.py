@@ -50,7 +50,7 @@ def convert_messages_to_text():
     """Converts session messages to a readable format for download."""
     transcript = "Chat History - Business Planning Assistant\n" + "=" * 40 + "\n"
     for msg in st.session_state["messages"]:
-        role = "User" if msg["role"] == "user" else "Assistant"
+        role = "User" if msg["role"] == "user" else "ThunderbAIrd Assistant"
         transcript += f"\n[{role}]: {msg['content']}\n"
     return transcript
 
@@ -185,7 +185,7 @@ with st.sidebar:
 
                                     # 2. Now safely access the role and content
                             if isinstance(msg, dict):
-                                role = "User" if msg.get("role") == "user" else "Assistant"
+                                role = "User" if msg.get("role") == "user" else "ThunderbAIrd Assistant"
                                 content = msg.get("content", "No content")
                                 st.markdown(f"**{role}**: {content[:100]}...")
                     else:
@@ -208,7 +208,7 @@ if not st.session_state["authenticated"]:
     st.warning("Please login with an authorized Student ID in the sidebar.")
 else:
     for msg in st.session_state["messages"]:
-        role_label = st.session_state["current_user"] if msg["role"] == "user" else "Assistant"
+        role_label = st.session_state["current_user"] if msg["role"] == "user" else "ThunderbAIrd Assistant"
 
         with st.chat_message(msg["role"]):
             # Show the interaction type as a small caption if it exists
