@@ -3,6 +3,8 @@ from firebase_admin import credentials, db
 import datetime
 import streamlit as st
 
+# Load service account credentials from st.secrets
+# Fix formatting for the private key (common issue with environment variables)
 @st.cache_resource
 def get_firebase_connection():
     if not firebase_admin._apps:
@@ -13,28 +15,59 @@ def get_firebase_connection():
         firebase_admin.initialize_app(cred, {'databaseURL': db_url})
     return db.reference("/")
 
-
-def save_to_firebase(user_id, model_name, messages, interaction_type, session_id):
+#The save_to_firebase function uses Flattened Updates to avoid overwriting existing chat data.
+def save_to_firebase(user_id, model_name, messages, interaction_type, session_id, feedback_value=None):
     db_ref = get_firebase_connection()
-    if db_ref:
-        clean_user_id = str(user_id).replace(".", "_")
+    clean_uid = str(user_id).replace(".", "_")
 
-        # Tag the most recent message with the interaction context
-        if messages:
-            messages[-1]["interaction"] = interaction_type
+    session_ref = db_ref.child("logs").child(clean_uid).child(session_id)
+    current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    last_index = len(messages) - 1
 
-        db_ref.child("logs").child(clean_user_id).child(session_id).update({
-            "model_name": model_name,
-            "transcript": messages,
-            "last_updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    update_data = {
+        "last_interaction": interaction_type,
+        "last_updated": current_time,
+        f"transcript/{last_index}/model_name": model_name,
+        f"transcript/{last_index}/content": messages[-1]["content"],
+        f"transcript/{last_index}/role": messages[-1]["role"],
+        f"transcript/{last_index}/timestamp": current_time,
+        f"transcript/{last_index}/interaction": interaction_type,
+        # --- NEW FIELD ---
+        f"transcript/{last_index}/user_understood": feedback_value
+    }
+
+    session_ref.update(update_data)
+
+#Loads a specific conversation from the database into Streamlit's session_state.
+# Efficiently fetch only the message list (the transcript)
+# Firebase sometimes returns JSON arrays as Python lists.
+# This list comprehension removes 'None' holes created by manual indexing.
+# Firebase sometimes returns JSON arrays as Python lists.
+# This list comprehension removes 'None' holes created by manual indexing.
+# def load_selected_chat(user_id, session_key):
+#     db_ref = get_firebase_connection()
+#     clean_user_id = str(user_id).replace(".", "_")
+#
+#     transcript = db_ref.child("logs").child(clean_user_id).child(session_key).child("transcript").get()
+#
+#     if transcript:
+#         if isinstance(transcript, list):
+#             st.session_state["messages"] = [m for m in transcript if m is not None]
+#         else:
+#             st.session_state["messages"] = list(transcript.values())
+#
+#         st.session_state["session_id"] = session_key
+
+# Calculate the index of the AI message that just occurred
+# Update only the specific field 'user_understood' for that specific message
+def update_previous_feedback(user_id, session_id, messages, understood_value):
+    db_ref = get_firebase_connection()
+    clean_uid = str(user_id).replace(".", "_")
+
+    target_index = len(messages) - 2
+
+    if target_index >= 0:
+        path = f"logs/{clean_uid}/{session_id}/transcript/{target_index}"
+        db_ref.child(path).update({
+            "user_understood": understood_value
         })
-
-# This stays the same and works better with Option 1
-def load_selected_chat(user_id, session_key):
-    db_ref = get_firebase_connection()
-    clean_user_id = str(user_id).replace(".", "_")
-    chat_data = db_ref.child("logs").child(clean_user_id).child(session_key).get()
-
-    if chat_data and "transcript" in chat_data:
-        st.session_state["messages"] = chat_data["transcript"]
-        st.session_state["session_id"] = session_key
