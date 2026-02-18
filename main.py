@@ -18,7 +18,7 @@ st.markdown("""
 
 AI_CONFIG = {
     "active_model": "gemini-3-pro-preview",
-    "system_instruction": "You are an Afrikaans assistant. You must make sure you are not using Dutch or German in your responses. Structure your responses so they are easily readable. You must always explain the concept in both English and Afrikaans. Make use of STOMPI regarding sentence structure."
+    "system_instruction": "You are a South African Business Planning Asssitant.
 }
 
 # State Initialization
@@ -116,13 +116,11 @@ with st.sidebar:
 ###        Main         ###
 ###########################
 st.image("combined_logo.jpg")
-st.title("AIfrikaans Assistant")
+st.title("ThunderbAIrd Assistant")
 
 if not st.session_state["authenticated"]:
     st.warning("Please login via the sidebar.")
-    st.info("Welcome to the AIfrikaans Assistant Streamlit App!\n You are welcome to ask all your afrikaans related questions here. \n\n"
-            "All your prompts and generated responses are recorded while using the app. You will be asked for feedback after each questions. If you answer using the \"I dont understand button\", the large language model will try nad be more detailed in its explanation to try assist you learn!"
-            "\n\nPlease remember that large language models are not perfect and are prone to hallucinations or representing false information as fact quite convincingly")
+    st.info("Welcome to the ThunderbAIrd Academy Business Planning Assistant!")
     st.stop()
 
 # 1. Process pending feedback FIRST (before rendering anything else).
@@ -165,7 +163,7 @@ if st.session_state.get("trigger_clarification"):
     generate_ai_response("CLARIFICATION_RESPONSE")
 
 # 4. Chat Input
-input_msg = "Please provide feedback..." if st.session_state["feedback_pending"] else "Ask your afrikaans question here"
+input_msg = "Please provide feedback..." if st.session_state["feedback_pending"] else "Ask your business or planning question here"
 if prompt := st.chat_input(input_msg, disabled=st.session_state["feedback_pending"]):
     st.session_state["messages"].append({"role": "user", "content": prompt})
 
