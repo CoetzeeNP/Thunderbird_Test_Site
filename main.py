@@ -1,36 +1,14 @@
 import streamlit as st
-from ai_strategy import AIManager
-from database import save_to_firebase, get_firebase_connection, load_selected_chat
-from streamlit_cookies_controller import CookieController
 from datetime import datetime
-import json
+from ai_strategy import AIManager
+from database import save_to_firebase, update_previous_feedback
+from streamlit_cookies_controller import CookieController
 
-if "session_id" not in st.session_state:
-    st.session_state["session_id"] = datetime.now().strftime("%Y%m%d_%H%M%S")
+# Setup & Configuration
+st.set_page_config(layout="wide", page_title="AI-frikaans Assistant")
+#controller = CookieController()
 
-# 1. Initialize Cookie Controller before Page Config
-controller = CookieController()
-
-# --- Constants & State Initialization ---
-AUTHORIZED_STUDENT_IDS = st.secrets["AUTHORIZED_STUDENT_LIST"]
-
-# --- Session State Defaults ---
-if "messages" not in st.session_state: st.session_state["messages"] = []
-if "feedback_pending" not in st.session_state: st.session_state["feedback_pending"] = False
-if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
-if "current_user" not in st.session_state: st.session_state["current_user"] = None
-
-# --- Cookie Persistence Check ---
-# This runs every time the page loads/refreshes
-cached_uid = controller.get('student_auth_id')
-if cached_uid and not st.session_state["authenticated"]:
-    if cached_uid in AUTHORIZED_STUDENT_IDS:
-        st.session_state["authenticated"] = True
-        st.session_state["current_user"] = cached_uid
-
-# --- Page Config & Styling ---
-st.set_page_config(layout="wide", page_title="ThunderbAIrd Assistant")
-
+# Custom CSS
 st.markdown("""
     <style>
     div[data-testid="stColumn"]:nth-of-type(1) button { background-color: #28a745 !important; color: white !important; }
@@ -38,246 +16,201 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- Internal AI Configuration ---
 AI_CONFIG = {
-    "active_model": "ChatGPT 5.2",
-    "system_instruction": "You are a helpful Business Planning Assistant called ThunderbAIrd. Provide clear, professional, and actionable advice."
+    "active_model": "gemini-3-pro-preview",
+    "system_instruction": "You are an Afrikaans assistant. You must make sure you are not using Dutch or German in your responses. Structure your responses so they are easily readable. You must always explain the concept in both English and Afrikaans. Make use of STOMPI regarding sentence structure."
 }
-selected_label = AI_CONFIG["active_model"]
-system_instr = AI_CONFIG["system_instruction"]
 
-def convert_messages_to_text():
-    """Converts session messages to a readable format for download."""
-    transcript = "Chat History - Business Planning Assistant\n" + "=" * 40 + "\n"
-    for msg in st.session_state["messages"]:
-        role = "User" if msg["role"] == "user" else "ThunderbAIrd Assistant"
-        transcript += f"\n[{role}]: {msg['content']}\n"
-    return transcript
+# State Initialization
+if "session_id" not in st.session_state:
+    st.session_state["session_id"] = datetime.now().strftime("%Y%m%d_%H%M%S")
+if "messages" not in st.session_state: st.session_state["messages"] = []
+if "feedback_pending" not in st.session_state: st.session_state["feedback_pending"] = False
+if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
+if "current_user" not in st.session_state: st.session_state["current_user"] = None
+
+# Persistence & Auth
+AUTHORIZED_IDS = st.secrets["AUTHORIZED_STUDENT_LIST"]
+#cached_uid = controller.get('student_auth_id')
+
+#if cached_uid and not st.session_state["authenticated"]:
+#    if cached_uid in AUTHORIZED_IDS:
+#        st.session_state.update({"authenticated": True, "current_user": cached_uid})
 
 
-# --- Helper Functions ---
-def handle_feedback(understood: bool, selected_label):
-    if understood:
-        # Log successful interaction
-        save_to_firebase(
-            st.session_state["current_user"],
-            selected_label,
-            st.session_state["messages"],
-            "UNDERSTOOD_FEEDBACK",
-            st.session_state["session_id"],
-        )
-    else:
-        # 1. Append the prompt for the LLM
-        st.session_state["messages"].append({
-            "role": "user",
-            "content": "I don't understand the previous explanation. Please break it down further."
-        })
-        # 2. Set the flag to trigger the AI in the main loop
-        st.session_state["trigger_clarification"] = True
-
+# Unified function to get AI response, stream to UI, and log to DB.
+def generate_ai_response(interaction_type):
+    st.session_state["is_generating"] = True
     st.session_state["feedback_pending"] = False
 
-# --- UI Header ---
-st.image("combined_logo.jpg")
-st.title("ThunderbAIrd Assistant")
+    with st.chat_message("assistant"):
+        with st.container(border=True):
+            st.markdown("**AI-frikaans Assistant:**")
+            ai_manager = AIManager(AI_CONFIG["active_model"])
 
-# --- Sidebar Management ---
+            full_res = ""
+            actual_model = AI_CONFIG["active_model"]
+            placeholder = st.empty()
+
+            for chunk, model_label in ai_manager.get_response_stream(
+                    st.session_state["messages"],
+                    AI_CONFIG["system_instruction"]
+            ):
+                full_res += chunk
+                actual_model = model_label
+                placeholder.markdown(full_res + "▌")
+
+            placeholder.markdown(full_res)
+    st.session_state["messages"].append({"role": "assistant", "content": full_res})
+    st.session_state["last_model_used"] = actual_model
+    st.session_state["feedback_pending"] = True
+    st.session_state["is_generating"] = False
+
+    save_to_firebase(
+        st.session_state["current_user"],
+        actual_model,
+        st.session_state["messages"],
+        interaction_type,
+        st.session_state["session_id"]
+    )
+    st.rerun()
+
+###########################
+###        Sidebar      ###
+###########################
 with st.sidebar:
     st.image("icdf.png")
-    st.header("Menu")
-
     if not st.session_state["authenticated"]:
-        u_id = st.text_input("Enter Student ID", type="password")
-        if st.button("Login", use_container_width=True):
-            if u_id in AUTHORIZED_STUDENT_IDS:
-                controller.set('student_auth_id', u_id)  # Save cookie
-                st.session_state["authenticated"] = True
-                st.session_state["current_user"] = u_id
-                st.rerun()
-            else:
-                st.error("Invalid ID")
+        st.info("Enter your username and password below!")
+        u_pass = st.text_input("Enter Username",)
+        u_id = st.text_input("Enter Password", type="password")
+        if st.button("Login", use_container_width=True) and u_id in AUTHORIZED_IDS:
+            #controller.set('student_auth_id', u_id)
+            st.session_state.update({"authenticated": True, "current_user": u_id})
+            st.rerun()
     else:
         st.write(f"**Logged in as:** {st.session_state['current_user']}")
         col1, col2 = st.columns(2)
-
         with col1:
             if st.button("Logout", use_container_width=True):
+                st.cache_data.clear()
                 st.session_state.clear()
                 st.rerun()
-
         with col2:
-            # Your new MS Form button
             st.link_button("Feedback",
-                           "https://forms.office.com/Pages/ResponsePage.aspx?id=uRv8jg-5SEq_bLoGhhk7gBvkZQsfRhhErcivaQmEhItUNENSMEJNQTM3UzQ1RlBMSFBUVTFKTFg2VS4u",
+                           "https://forms.office.com/Pages/ResponsePage.aspx?id=...",
                            use_container_width=True)
 
+        st.divider()
 
-        # --- Download Button ---
-        if st.session_state["messages"]:
-            chat_text = "Business Planning Assistant Transcript\n" + "=" * 30
-            for m in st.session_state["messages"]:
-                chat_text += f"\n{m['role'].upper()}: {m['content']}\n"
-
-            st.download_button("📥 Download Current Chat", chat_text, file_name="chat.txt", use_container_width=True)
-
-            # 2. LOAD PREVIOUS CHATS
-        st.markdown("---")
-        db_ref = get_firebase_connection()
-        clean_user_id = str(st.session_state['current_user']).replace(".", "_")
-        user_logs = db_ref.child("logs").child(clean_user_id).get()
-
-        if user_logs:
-            # 1. Create the mapping for clean timestamps
-            display_options = {}
-            for raw_key in sorted(user_logs.keys(), reverse=True):
-                try:
-                    dt_obj = datetime.fromisoformat(str(raw_key))
-                    clean_date = dt_obj.strftime("%b %d, %Y - %I:%M %p")
-                except ValueError:
-                    clean_date = str(raw_key)
-                display_options[clean_date] = raw_key
-
-            st.subheader("Chat History")
-
-            # 1. Get ONLY the keys (session IDs) to avoid downloading all content
-            # Note: Firebase Admin SDK doesn't have a native 'shallow' get.
-            # To be truly efficient, we just fetch the keys under the user's log node.
-            all_logs_dict = db_ref.child("logs").child(clean_user_id).get(shallow=True)
-
-            if all_logs_dict:
-                # Get keys and sort them (newest first)
-                all_session_keys = sorted(all_logs_dict.keys(), reverse=True)
-
-                display_options = {
-                    datetime.fromisoformat(k).strftime("%b %d, %Y - %I:%M %p")
-                    if "T" in k else k: k
-                    for k in all_session_keys
-                }
-
-                selected_display = st.selectbox("Choose a previous session:", options=list(display_options.keys()))
-                sel_log_key = display_options[selected_display]
-
-                # 2. FETCH PREVIEW: Only get the first 2 messages of the SELECTED session
-                # This prevents downloading the whole conversation
-                preview_query = db_ref.child("logs").child(clean_user_id).child(
-                    sel_log_key).order_by_key().limit_to_first(2).get()
-
-                with st.container(border=True):
-                    st.caption("🔍 Preview of selected session")
-
-                    if isinstance(preview_query, list):
-                        # Firebase sometimes returns a list if keys are numeric/sequential
-                        messages = [m for m in preview_query if m is not None]
-                    elif isinstance(preview_query, dict):
-                        # Usually returns a dict of {unique_id: {role:..., content:...}}
-                        messages = list(preview_query.values())
-                    else:
-                        messages = []
-
-                    if messages:
-                        for msg in messages:
-                            # 1. If the message is a string, convert it to a dictionary
-                            if isinstance(msg, str):
-                                try:
-                                    msg = json.loads(msg)
-                                except json.JSONDecodeError:
-                                    continue
-
-                                    # 2. Now safely access the role and content
-                            if isinstance(msg, dict):
-                                role = "User" if msg.get("role") == "user" else "ThunderbAIrd Assistant"
-                                content = msg.get("content", "No content")
-                                st.markdown(f"**{role}**: {content[:100]}...")
-                    else:
-                        st.info("No messages found in this session.")
-
-            # 4. Action Button
-            if st.button("🔄 Load & Continue Session", type="primary", use_container_width=True):
-                st.session_state["messages"] = []
-                load_selected_chat(st.session_state['current_user'], sel_log_key)
-                st.rerun()
-
-        # 3. CLEAR CHAT (Important: resets session_id)
         if st.button("New Chat", use_container_width=True):
-            st.session_state["messages"] = []
-            st.session_state["session_id"] = datetime.now().strftime("%Y%m%d_%H%M%S")
+            st.session_state.update(
+                {"messages": [], "session_id": datetime.now().strftime("%Y%m%d_%H%M%S"), "feedback_pending": False})
+            st.rerun()
+###########################
+###        Sidebar      ###
+###########################
+
+
+###########################
+###        Main         ###
+###########################
+st.image("combined_logo.jpg")
+st.title("AIfrikaans Assistant")
+
+if not st.session_state["authenticated"]:
+    st.warning("Please login via the sidebar.")
+    st.info("Welcome to the AIfrikaans Assistant Streamlit App!\n You are welcome to ask all your afrikaans related questions here. \n\n"
+            "All your prompts and generated responses are recorded while using the app. You will be asked for feedback after each questions. If you answer using the \"I dont understand button\", the large language model will try nad be more detailed in its explanation to try assist you learn!"
+            "\n\nPlease remember that large language models are not perfect and are prone to hallucinations or representing false information as fact quite convincingly")
+    st.stop()
+
+# 1. Process pending feedback FIRST (before rendering anything else).
+#    This block runs during the automatic rerun that follows the on_click callback.
+#    At this point feedback_pending is already False (set in handle_feedback),
+#    so the feedback buttons will not render this cycle — no duplicate UI.
+if "pending_feedback_value" in st.session_state:
+    understood = st.session_state.pop("pending_feedback_value")  # consume the flag
+
+    user_id = st.session_state["current_user"]
+    session_id = st.session_state["session_id"]
+    model_to_log = st.session_state.get("last_model_used", AI_CONFIG["active_model"])
+
+    if understood:
+        save_to_firebase(
+            user_id, model_to_log, st.session_state["messages"],
+            "GENERATED_RESPONSE", session_id, feedback_value=True
+        )
+    else:
+        clarification_text = "I don't understand the previous explanation. Please break it down further."
+        st.session_state["messages"].append({"role": "user", "content": clarification_text})
+        update_previous_feedback(user_id, session_id, st.session_state["messages"], False)
+        save_to_firebase(
+            user_id, model_to_log, st.session_state["messages"],
+            "CLARIFICATION_REQUEST", session_id, feedback_value=None
+        )
+
+        st.session_state["trigger_clarification"] = True
+
+# 2. Display Chat History
+for msg in st.session_state["messages"]:
+    with st.chat_message(msg["role"]):
+        with st.container(border=True):
+            label = st.session_state["current_user"] if msg["role"] == "user" else "Assistant"
+            st.markdown(f"**{label}:**\n\n{msg['content']}")
+
+# 3. Trigger clarification AI response if flagged
+if st.session_state.get("trigger_clarification"):
+    st.session_state["trigger_clarification"] = False
+    generate_ai_response("CLARIFICATION_RESPONSE")
+
+# 4. Chat Input
+input_msg = "Please provide feedback..." if st.session_state["feedback_pending"] else "Ask your afrikaans question here"
+if prompt := st.chat_input(input_msg, disabled=st.session_state["feedback_pending"]):
+    st.session_state["messages"].append({"role": "user", "content": prompt})
+
+    save_to_firebase(
+        st.session_state["current_user"],
+        AI_CONFIG["active_model"],
+        st.session_state["messages"],
+        "USER_PROMPT",
+        st.session_state["session_id"]
+    )
+    st.rerun()
+
+# 5. Feedback UI — only shown when a response is complete and not currently generating
+# 5. Feedback UI — only shown when a response is complete and not currently generating
+if (
+    st.session_state["messages"]
+    and st.session_state["messages"][-1]["role"] == "assistant"
+    and st.session_state["feedback_pending"]
+    and not st.session_state.get("is_generating", False)
+):
+    st.info("Please provide feedback on the generated response!")
+    with st.form("feedback_form", clear_on_submit=True, border=False):
+        c1, c2 = st.columns(2)
+
+        understood = c1.form_submit_button("I understand!", use_container_width=True)
+        not_understood = c2.form_submit_button("I need more help!", use_container_width=True)
+
+        if understood:
+            st.session_state["feedback_pending"] = False
+            st.session_state["pending_feedback_value"] = True
             st.rerun()
 
-# --- Main Logic ---
-if not st.session_state["authenticated"]:
-    st.warning("Please login with an authorized Student ID in the sidebar.")
-else:
-    for msg in st.session_state["messages"]:
-        role_label = st.session_state["current_user"] if msg["role"] == "user" else "ThunderbAIrd Assistant"
+        if not_understood:
+            st.session_state["feedback_pending"] = False
+            st.session_state["pending_feedback_value"] = False
+            st.rerun()
 
-        with st.chat_message(msg["role"]):
-            # Show the interaction type as a small caption if it exists
-            if "interaction" in msg:
-                st.caption(f"Action: {msg['interaction'].replace('_', ' ')}")
-
-            with st.container(border=True):
-                st.markdown(f"**{role_label}:**")
-                st.markdown(msg["content"])
-
-    # 2. NEW: The Clarification Trigger Catch
-    # This block runs if handle_feedback set the trigger_clarification flag
-    if st.session_state.get("trigger_clarification", False):
-        with st.chat_message("assistant"):
-            with st.container(border=True):
-                st.markdown("**ThunderbAIrd Assistant:**")
-                ai_manager = AIManager(selected_label)
-                full_response = st.write_stream(
-                    ai_manager.get_response_stream(st.session_state["messages"], system_instr)
-                )
-
-        # Finalize Clarification State
-        save_to_firebase(
-            st.session_state["current_user"],
-            selected_label,
-            st.session_state["messages"],  # Correct: passing the list
-            "CLARIFICATION_RESPONSE",  # Correct: the interaction type
-            st.session_state["session_id"]  # Correct: the missing session_id
-        )
-
-        st.session_state["messages"].append({"role": "assistant", "content": full_response})
-        st.session_state["trigger_clarification"] = False
-        st.session_state["feedback_pending"] = True
-        st.rerun()
-
-    # 3. Standard Chat Input
-    input_ph = "Please give feedback on the last answer..." if st.session_state["feedback_pending"] else "Ask your question here..."
-    if prompt := st.chat_input(input_ph, disabled=st.session_state["feedback_pending"]):
-
-        st.session_state["messages"].append({"role": "user", "content": prompt})
-
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        with st.chat_message("assistant"):
-            with st.container(border=True):
-                st.markdown("**ThunderbAIrd Assistant:**")
-                ai_manager = AIManager(selected_label)
-                full_response = st.write_stream(
-                    ai_manager.get_response_stream(st.session_state["messages"], system_instr)
-                )
-
-        save_to_firebase(
-            user_id=st.session_state["current_user"],
-            model_name=selected_label,
-            messages=st.session_state["messages"],  # Pass the history list
-            interaction_type="INITIAL_QUERY",
-            session_id=st.session_state["session_id"]
-        )
-        st.session_state["messages"].append({"role": "assistant", "content": full_response})
-        st.session_state["feedback_pending"] = True
-        st.rerun()
-
-    # 4. Feedback Section
-    if st.session_state["feedback_pending"]:
-        st.divider()
-        st.info("Did you understand the assistant's response?")
-        c1, c2 = st.columns(2)
-        with c1:
-            st.button("I understand!", on_click=handle_feedback, args=(True, selected_label), use_container_width=True)
-        with c2:
-            st.button("I need some help!", on_click=handle_feedback, args=(False, selected_label), use_container_width=True)
+# 6. Generate Standard Response
+if (
+    st.session_state["messages"]
+    and st.session_state["messages"][-1]["role"] == "user"
+    and not st.session_state["feedback_pending"]
+    and not st.session_state.get("trigger_clarification")
+):
+    generate_ai_response("GENERATED_RESPONSE")
+###########################
+###        Main         ###
+###########################
