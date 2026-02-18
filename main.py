@@ -18,7 +18,7 @@ st.markdown("""
 
 AI_CONFIG = {
     "active_model": "gemini-3-pro-preview",
-    "system_instruction": "You are a South African Business Planning Asssitant.
+    "system_instruction": "You are a South African Business Planning Asssitant."
 }
 
 # State Initialization
