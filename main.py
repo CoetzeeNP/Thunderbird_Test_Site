@@ -5,7 +5,7 @@ from database import save_to_firebase, update_previous_feedback
 from streamlit_cookies_controller import CookieController
 
 # Setup & Configuration
-st.set_page_config(layout="wide", page_title="AI-frikaans Assistant")
+st.set_page_config(layout="wide", page_title="ThunderbAIrd Assistant")
 #controller = CookieController()
 
 # Custom CSS
