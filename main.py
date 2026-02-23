@@ -4,7 +4,7 @@ from ai_strategy import AIManager
 from database import save_to_firebase, update_previous_feedback
 
 # Setup & Configuration
-st.set_page_config(layout="wide", page_title="AI-frikaans Assistant")
+st.set_page_config(layout="wide", page_title="ThunderbAIrd Assistant")
 #controller = CookieController()
 
 # Custom CSS
