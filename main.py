@@ -135,7 +135,6 @@ if not st.session_state["authenticated"]:
     st.info("Welcome to the ThunderBIArd Business Planner Streamlit App!\n You are welcome to ask all your business and business planning related questions here. \n\n"
             "All your prompts and generated responses are recorded while using the app. You will be asked for feedback after each questions. If you answer using the \"I dont understand button\", the large language model will try nad be more detailed in its explanation to try assist you learn!"
             "\n\nPlease remember that large language models are not perfect and are prone to hallucinations or representing false information as fact quite convincingly"
-            "\n\nPlease remember that AI are prone to mistakes and hallucinations!")
     st.stop()
 
 # 1. Process pending feedback FIRST (before rendering anything else).
