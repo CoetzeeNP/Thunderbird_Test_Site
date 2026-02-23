@@ -17,7 +17,7 @@ st.markdown("""
 
 AI_CONFIG = {
     "active_model": "gemini-3-pro-preview",
-    "system_instruction": "You are an Afrikaans assistant. You must make sure you are not using Dutch or German in your responses. Structure your responses so they are easily readable. You must always explain the concept in both English and Afrikaans. Make use of STOMPI regarding sentence structure."
+    "system_instruction": "You are an Business Planning assistant. All metrics and decisions need to be based within the South African context and use South African Rands for currecny."
 }
 
 # State Initialization
@@ -49,7 +49,7 @@ def generate_ai_response(interaction_type):
             placeholder = st.empty()
 
             # Add the Streamlit spinner right here
-            with st.spinner("Dink aan jou vraag..."):  # "Thinking..." in Afrikaans
+            with st.spinner("Busy with your request..."):
                 for chunk, model_label in ai_manager.get_response_stream(
                         st.session_state["messages"],
                         AI_CONFIG["system_instruction"]
