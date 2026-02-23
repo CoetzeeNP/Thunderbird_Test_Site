@@ -18,7 +18,7 @@ st.markdown("""
 
 AI_CONFIG = {
     "active_model": "gemini-3-pro-preview",
-    "system_instruction": "You are a South African Business Planning Asssitant."
+    "system_instruction": "You are a South African Business Planning Asssitant. Use South African Rand as the currency when necessary."
 }
 
 # State Initialization
@@ -28,10 +28,6 @@ if "messages" not in st.session_state: st.session_state["messages"] = []
 if "feedback_pending" not in st.session_state: st.session_state["feedback_pending"] = False
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 if "current_user" not in st.session_state: st.session_state["current_user"] = None
-
-# Persistence & Auth
-AUTHORIZED_IDS = st.secrets["AUTHORIZED_STUDENT_LIST"]
-#cached_uid = controller.get('student_auth_id')
 
 #if cached_uid and not st.session_state["authenticated"]:
 #    if cached_uid in AUTHORIZED_IDS:
@@ -115,12 +111,66 @@ with st.sidebar:
 ###########################
 ###        Main         ###
 ###########################
+if "authenticated" not in st.session_state:
+    st.session_state["authenticated"] = False
+
+with st.sidebar:
+    st.image("icdf.png")
+
+    if not st.session_state["authenticated"]:
+        st.info("Enter your username and password below!")
+
+        # Added .strip() to prevent invisible spaces from breaking the login
+        username = st.text_input("Enter Username").strip()
+        password = st.text_input("Enter Password", type="password").strip()
+
+        if st.button("Login", use_container_width=True):
+            # Using .get() prevents a crash if the credentials block isn't found
+            if username in st.secrets.get("credentials", {}) and st.secrets["credentials"][username] == password:
+                st.session_state.update({"authenticated": True, "current_user": username})
+                st.rerun()
+            else:
+                st.error("Incorrect username or password.")
+
+    else:
+        st.write(f"Logged in as: {st.session_state['current_user']}")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Logout", use_container_width=True):
+                st.cache_data.clear()
+                st.session_state.clear()
+                st.rerun()
+        with col2:
+            st.link_button("Feedback", "https://forms.office.com/Pages/ResponsePage.aspx?id=...",
+                           use_container_width=True)
+
+        st.divider()
+
+        if st.button("New Chat", use_container_width=True):
+            st.session_state.update({
+                "messages": [],
+                "session_id": datetime.now().strftime("%Y%m%d_%H%M%S"),
+                "feedback_pending": False
+            })
+            st.rerun()
+###########################
+###        Sidebar      ###
+###########################
+
+
+###########################
+###        Main         ###
+###########################
 st.image("combined_logo.jpg")
 st.title("ThunderbAIrd Assistant")
 
 if not st.session_state["authenticated"]:
     st.warning("Please login via the sidebar.")
-    st.info("Welcome to the ThunderbAIrd Academy Business Planning Assistant!")
+    st.info("Welcome to the ThunderBIArd Business Planner Streamlit App!\n You are welcome to ask all your business and business planning related questions here. \n\n"
+            "All your prompts and generated responses are recorded while using the app. You will be asked for feedback after each questions. If you answer using the \"I dont understand button\", the large language model will try nad be more detailed in its explanation to try assist you learn!"
+            "\n\nPlease remember that large language models are not perfect and are prone to hallucinations or representing false information as fact quite convincingly"
+            "\n\nPlease remember that AI are prone to mistakes and hallucinations!")
     st.stop()
 
 # 1. Process pending feedback FIRST (before rendering anything else).
@@ -163,7 +213,7 @@ if st.session_state.get("trigger_clarification"):
     generate_ai_response("CLARIFICATION_RESPONSE")
 
 # 4. Chat Input
-input_msg = "Please provide feedback..." if st.session_state["feedback_pending"] else "Ask your business or planning question here"
+input_msg = "Please provide feedback..." if st.session_state["feedback_pending"] else "Ask your business or planning question here..."
 if prompt := st.chat_input(input_msg, disabled=st.session_state["feedback_pending"]):
     st.session_state["messages"].append({"role": "user", "content": prompt})
 
