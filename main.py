@@ -2,10 +2,9 @@ import streamlit as st
 from datetime import datetime
 from ai_strategy import AIManager
 from database import save_to_firebase, update_previous_feedback
-from streamlit_cookies_controller import CookieController
 
 # Setup & Configuration
-st.set_page_config(layout="wide", page_title="ThunderbAIrd Assistant")
+st.set_page_config(layout="wide", page_title="AI-frikaans Assistant")
 #controller = CookieController()
 
 # Custom CSS
@@ -18,7 +17,7 @@ st.markdown("""
 
 AI_CONFIG = {
     "active_model": "gemini-3-pro-preview",
-    "system_instruction": "You are a South African Business Planning Asssitant. Use South African Rand as the currency when necessary."
+    "system_instruction": "You are an Afrikaans assistant. You must make sure you are not using Dutch or German in your responses. Structure your responses so they are easily readable. You must always explain the concept in both English and Afrikaans. Make use of STOMPI regarding sentence structure."
 }
 
 # State Initialization
@@ -28,6 +27,7 @@ if "messages" not in st.session_state: st.session_state["messages"] = []
 if "feedback_pending" not in st.session_state: st.session_state["feedback_pending"] = False
 if "authenticated" not in st.session_state: st.session_state["authenticated"] = False
 if "current_user" not in st.session_state: st.session_state["current_user"] = None
+
 
 #if cached_uid and not st.session_state["authenticated"]:
 #    if cached_uid in AUTHORIZED_IDS:
@@ -48,15 +48,18 @@ def generate_ai_response(interaction_type):
             actual_model = AI_CONFIG["active_model"]
             placeholder = st.empty()
 
-            for chunk, model_label in ai_manager.get_response_stream(
-                    st.session_state["messages"],
-                    AI_CONFIG["system_instruction"]
-            ):
-                full_res += chunk
-                actual_model = model_label
-                placeholder.markdown(full_res + "▌")
+            # Add the Streamlit spinner right here
+            with st.spinner("Dink aan jou vraag..."):  # "Thinking..." in Afrikaans
+                for chunk, model_label in ai_manager.get_response_stream(
+                        st.session_state["messages"],
+                        AI_CONFIG["system_instruction"]
+                ):
+                    full_res += chunk
+                    actual_model = model_label
+                    placeholder.markdown(full_res + "▌")
 
             placeholder.markdown(full_res)
+
     st.session_state["messages"].append({"role": "assistant", "content": full_res})
     st.session_state["last_model_used"] = actual_model
     st.session_state["feedback_pending"] = True
