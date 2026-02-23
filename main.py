@@ -133,7 +133,7 @@ st.title("ThunderbAIrd Assistant")
 if not st.session_state["authenticated"]:
     st.warning("Please login via the sidebar.")
     st.info("Welcome to the ThunderbAIrd Business Planner Streamlit App!\n You are welcome to ask all your business and business planning related questions here. \n\n"
-            "All your prompts and generated responses are recorded while using the app. You will be asked for feedback after each questions. If you click the the \"I need more help\" button, the large language model will try and be more detailed in its explanation to try assist you learn!"
+            "All your prompts and generated responses are recorded while using the app. You will be asked for feedback after each questions. If you click the \"I need more help\" button, the large language model will try and be more detailed in its explanation to try assist you learn!"
             "\n\nPlease remember that large language models are not perfect and are prone to hallucinations or representing false information as fact quite convincingly.")
     st.stop()
 
